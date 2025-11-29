@@ -119,3 +119,49 @@ def recommend_fertilizer(data: FertilizerData):
         "organic_option": organic,
         "safety_note": safety
     }
+
+# --------------------------------
+# Crop Recommendation Endpoint
+# --------------------------------
+
+class CropData(BaseModel):
+    soil_grade: str
+    season: str
+    temperature: float
+    rainfall: str
+
+
+@app.post("/crop")
+def recommend_crop(data: CropData):
+
+    crops = []
+
+    if data.soil_grade == "Excellent":
+        crops.append("Wheat")
+        crops.append("Rice")
+        crops.append("Sugarcane")
+
+    elif data.soil_grade == "Good":
+        crops.append("Maize")
+        crops.append("Cotton")
+
+    elif data.soil_grade == "Moderate":
+        crops.append("Millets")
+        crops.append("Pulses")
+
+    else:
+        crops.append("Barley")
+        crops.append("Mustard")
+
+    if data.season.lower() == "summer":
+        crops.append("Groundnut")
+        crops.append("Watermelon")
+
+    if data.rainfall.lower() == "high":
+        crops.append("Paddy")
+
+    return {
+        "recommended_crops": list(set(crops)),
+        "season": data.season,
+        "soil_grade": data.soil_grade
+    }
