@@ -165,3 +165,53 @@ def recommend_crop(data: CropData):
         "season": data.season,
         "soil_grade": data.soil_grade
     }
+
+# --------------------------------------
+# Market Price Prediction AI (Demo)
+# --------------------------------------
+
+class MarketRequest(BaseModel):
+    crop: str
+    mandi: str
+
+@app.post("/market")
+def market_prediction(data: MarketRequest):
+
+    # Demo prediction engine
+    base_price = {
+        "Wheat": 2150,
+        "Rice": 2450,
+        "Maize": 1920,
+        "Cotton": 6200,
+        "Millets": 3200,
+        "Pulses": 5400,
+        "Vegetables": 3000
+    }
+
+    trend_map = {
+        "Wheat": "⬆ Increasing",
+        "Rice": "➡ Stable",
+        "Maize": "⬇ Decreasing",
+        "Cotton": "⬆ Increasing",
+        "Millets": "➡ Stable",
+        "Pulses": "⬆ Increasing",
+        "Vegetables": "⬇ Decreasing"
+    }
+
+    crop = data.crop
+
+    price = base_price.get(crop, 3000)
+    trend = trend_map.get(crop, "➡ Stable")
+
+    prediction_7day = price + 150 if "⬆" in trend else price - 100
+
+    best_sell_day = "Next 3 days" if "⬆" in trend else "Wait 5–7 days"
+
+    return {
+        "crop": crop,
+        "mandi": data.mandi,
+        "today_price": price,
+        "price_after_7_days": prediction_7day,
+        "market_trend": trend,
+        "best_sell_time": best_sell_day
+    }
