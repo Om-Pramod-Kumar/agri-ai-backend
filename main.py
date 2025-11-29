@@ -73,3 +73,49 @@ def analyze_soil(data: SoilData):
         "grade": grade,
         "recommendations": recommendations
     }
+
+
+from pydantic import BaseModel
+
+# -------------------------------
+# Fertilizer Input Schema
+# -------------------------------
+
+class FertilizerData(BaseModel):
+    crop: str
+    nitrogen: float
+    phosphorus: float
+    potassium: float
+    soil_grade: str
+
+
+# -------------------------------
+# Fertilizer AI Endpoint
+# -------------------------------
+
+@app.post("/fertilizer")
+def recommend_fertilizer(data: FertilizerData):
+
+    rec = []
+
+    if data.nitrogen < 50:
+        rec.append("Apply Urea - 45 kg per acre")
+
+    if data.phosphorus < 40:
+        rec.append("Apply SSP - 35 kg per acre")
+
+    if data.potassium < 40:
+        rec.append("Apply Potash - 25 kg per acre")
+
+    if not rec:
+        rec.append("NPK levels sufficient — no fertilizer needed")
+
+    organic = "Add Vermicompost (250 kg per acre)"
+    safety = "Use gloves & mask during application"
+
+    return {
+        "crop": data.crop,
+        "recommendations": rec,
+        "organic_option": organic,
+        "safety_note": safety
+    }
