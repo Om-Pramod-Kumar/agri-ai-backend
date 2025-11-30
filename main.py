@@ -1,7 +1,18 @@
 from fastapi import FastAPI, UploadFile, File
+from tensorflow.keras.models import load_model
+from PIL import Image
+import numpy as np
+import io
+from pydantic import BaseModel
 
+# --------------------------------------
+# APP INIT
+# --------------------------------------
 app = FastAPI()
 
+# --------------------------------------
+# BASIC TEST ROUTE
+# --------------------------------------
 @app.get("/")
 def home():
     return {
@@ -9,19 +20,63 @@ def home():
         "message": "NeoKrishi API is live"
     }
 
+# -------------------------------------
+# LOAD TRAINED PEST MODEL
+# -------------------------------------
+model = load_model("pest_model.keras")
+
+CLASS_NAMES = [
+    "Pepper__bell___Bacterial_spot",
+    "Pepper__bell___healthy",
+    "Potato___Early_blight",
+    "Potato___healthy",
+    "Potato___Late_blight",
+    "Tomato___Target_Spot",
+    "Tomato___Tomato_mosaic_virus",
+    "Tomato___Tomato_YellowLeaf_Curl_Virus",
+    "Tomato___Bacterial_spot",
+    "Tomato___Early_blight",
+    "Tomato___healthy",
+    "Tomato___Late_blight",
+    "Tomato___Leaf_Mold",
+    "Tomato___Septoria_leaf_spot",
+    "Tomato___Spider_mites",
+    "Tomato___Two-spotted_spider_mite"
+]
+
+# -------------------------------------
+# IMAGE PREPROCESSOR
+# -------------------------------------
+def preprocess_image(image_bytes):
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = img.resize((224,224))
+    arr = np.array(img) / 255.0
+    return np.expand_dims(arr, axis=0)
+
+
+# -------------------------------------
+# 🐛 PEST AI ENDPOINT
+# -------------------------------------
 @app.post("/pest")
-async def pest_detect(file: UploadFile = File(...)):
+async def diagnose(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    processed = preprocess_image(image_bytes)
+
+    preds = model.predict(processed)[0]
+
+    idx = np.argmax(preds)
+    confidence = float(preds[idx])
+
     return {
         "filename": file.filename,
-        "disease": "Leaf Blast",
-        "confidence": "87%"
+        "disease": CLASS_NAMES[idx],
+        "confidence": f"{confidence * 100:.2f}%"
     }
 
-from pydantic import BaseModel
 
-# -------------------------------
-# Soil Input Schema
-# -------------------------------
+# -------------------------------------
+# 🌱 SOIL AI
+# -------------------------------------
 class SoilData(BaseModel):
     ph: float
     nitrogen: float
@@ -30,9 +85,6 @@ class SoilData(BaseModel):
     moisture: float
 
 
-# -------------------------------
-# Soil Analysis Endpoint
-# -------------------------------
 @app.post("/soil")
 def analyze_soil(data: SoilData):
 
@@ -44,26 +96,28 @@ def analyze_soil(data: SoilData):
         data.moisture
     ) / 5
 
-    grade = "Excellent" if score >= 80 else \
-            "Good" if score >= 60 else \
-            "Moderate" if score >= 40 else \
-            "Poor"
+    grade = (
+        "Excellent" if score >= 80 else
+        "Good" if score >= 60 else
+        "Moderate" if score >= 40 else
+        "Poor"
+    )
 
     recommendations = []
 
     if data.ph < 6:
         recommendations.append("Add lime to improve soil pH")
     elif data.ph > 8:
-        recommendations.append("Add organic compost to reduce alkalinity")
+        recommendations.append("Add compost to reduce alkalinity")
 
     if data.nitrogen < 50:
-        recommendations.append("Apply urea or vermicompost")
+        recommendations.append("Apply Urea or Vermicompost")
 
     if data.phosphorus < 40:
-        recommendations.append("Apply single super phosphate (SSP)")
+        recommendations.append("Apply SSP")
 
     if data.potassium < 40:
-        recommendations.append("Apply potash fertilizer")
+        recommendations.append("Apply Potash")
 
     if data.moisture < 30:
         recommendations.append("Increase irrigation")
@@ -75,12 +129,9 @@ def analyze_soil(data: SoilData):
     }
 
 
-from pydantic import BaseModel
-
-# -------------------------------
-# Fertilizer Input Schema
-# -------------------------------
-
+# -------------------------------------
+# 🌾 FERTILIZER AI
+# -------------------------------------
 class FertilizerData(BaseModel):
     crop: str
     nitrogen: float
@@ -89,41 +140,34 @@ class FertilizerData(BaseModel):
     soil_grade: str
 
 
-# -------------------------------
-# Fertilizer AI Endpoint
-# -------------------------------
-
 @app.post("/fertilizer")
 def recommend_fertilizer(data: FertilizerData):
 
     rec = []
 
     if data.nitrogen < 50:
-        rec.append("Apply Urea - 45 kg per acre")
+        rec.append("Apply Urea - 45 kg/ac")
 
     if data.phosphorus < 40:
-        rec.append("Apply SSP - 35 kg per acre")
+        rec.append("Apply SSP - 35 kg/ac")
 
     if data.potassium < 40:
-        rec.append("Apply Potash - 25 kg per acre")
+        rec.append("Apply Potash - 25 kg/ac")
 
     if not rec:
-        rec.append("NPK levels sufficient — no fertilizer needed")
-
-    organic = "Add Vermicompost (250 kg per acre)"
-    safety = "Use gloves & mask during application"
+        rec.append("Soil nutrients sufficient")
 
     return {
         "crop": data.crop,
         "recommendations": rec,
-        "organic_option": organic,
-        "safety_note": safety
+        "organic_option": "Add Vermicompost 250kg/ac",
+        "safety_note": "Use gloves & mask while applying"
     }
 
-# --------------------------------
-# Crop Recommendation Endpoint
-# --------------------------------
 
+# -------------------------------------
+# 🌿 CROP RECOMMENDATION
+# -------------------------------------
 class CropData(BaseModel):
     soil_grade: str
     season: str
@@ -137,25 +181,19 @@ def recommend_crop(data: CropData):
     crops = []
 
     if data.soil_grade == "Excellent":
-        crops.append("Wheat")
-        crops.append("Rice")
-        crops.append("Sugarcane")
+        crops += ["Wheat","Rice","Sugarcane"]
 
     elif data.soil_grade == "Good":
-        crops.append("Maize")
-        crops.append("Cotton")
+        crops += ["Maize","Cotton"]
 
     elif data.soil_grade == "Moderate":
-        crops.append("Millets")
-        crops.append("Pulses")
+        crops += ["Millets","Pulses"]
 
     else:
-        crops.append("Barley")
-        crops.append("Mustard")
+        crops += ["Barley","Mustard"]
 
     if data.season.lower() == "summer":
-        crops.append("Groundnut")
-        crops.append("Watermelon")
+        crops += ["Groundnut","Watermelon"]
 
     if data.rainfall.lower() == "high":
         crops.append("Paddy")
@@ -166,18 +204,18 @@ def recommend_crop(data: CropData):
         "soil_grade": data.soil_grade
     }
 
-# --------------------------------------
-# Market Price Prediction AI (Demo)
-# --------------------------------------
 
+# -------------------------------------
+# 📈 MARKET DEMO AI
+# -------------------------------------
 class MarketRequest(BaseModel):
     crop: str
     mandi: str
 
+
 @app.post("/market")
 def market_prediction(data: MarketRequest):
 
-    # Demo prediction engine
     base_price = {
         "Wheat": 2150,
         "Rice": 2450,
