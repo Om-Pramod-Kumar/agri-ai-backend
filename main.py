@@ -3,27 +3,32 @@ from tensorflow.keras.models import load_model
 from PIL import Image
 import numpy as np
 import io
+import os
+import urllib.request
 from pydantic import BaseModel
 
-# --------------------------------------
-# APP INIT
-# --------------------------------------
 app = FastAPI()
 
-# --------------------------------------
-# BASIC TEST ROUTE
-# --------------------------------------
-@app.get("/")
-def home():
-    return {
-        "status": "Backend working",
-        "message": "NeoKrishi API is live"
-    }
+# --------------------------
+# AUTO DOWNLOAD AI MODEL
+# --------------------------
 
-# -------------------------------------
-# LOAD TRAINED PEST MODEL
-# -------------------------------------
-model = load_model("pest_model.keras")
+MODEL_PATH = "pest_model.keras"
+
+DOWNLOAD_URL = "https://drive.google.com/uc?id=1kM0AnbendaVM_7pQ66BESJSPyJhEJySH&export=download"
+
+if not os.path.exists(MODEL_PATH):
+    print("📥 Downloading AI model...")
+    urllib.request.urlretrieve(DOWNLOAD_URL, MODEL_PATH)
+    print("✅ Model download completed!")
+
+print("🧠 Loading model...")
+model = load_model(MODEL_PATH)
+print("✅ Model loaded successfully")
+
+# --------------------------
+# CLASS LABELS
+# --------------------------
 
 CLASS_NAMES = [
     "Pepper__bell___Bacterial_spot",
@@ -41,22 +46,35 @@ CLASS_NAMES = [
     "Tomato___Leaf_Mold",
     "Tomato___Septoria_leaf_spot",
     "Tomato___Spider_mites",
-    "Tomato___Two-spotted_spider_mite"
+    "Tomato___Two-spotted_spider_mite",
 ]
 
-# -------------------------------------
-# IMAGE PREPROCESSOR
-# -------------------------------------
+# --------------------------
+# IMAGE PREPROCESS
+# --------------------------
+
 def preprocess_image(image_bytes):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    img = img.resize((224,224))
+    img = img.resize((224, 224))
     arr = np.array(img) / 255.0
-    return np.expand_dims(arr, axis=0)
+    arr = np.expand_dims(arr, axis=0)
+    return arr
 
+# --------------------------
+# ROOT ENDPOINT
+# --------------------------
 
-# -------------------------------------
-# 🐛 PEST AI ENDPOINT
-# -------------------------------------
+@app.get("/")
+def home():
+    return {
+        "status": "Backend working",
+        "message": "NeoKrishi AI API is live"
+    }
+
+# --------------------------
+# PEST DIAGNOSIS API
+# --------------------------
+
 @app.post("/pest")
 async def diagnose(file: UploadFile = File(...)):
     image_bytes = await file.read()
@@ -64,19 +82,19 @@ async def diagnose(file: UploadFile = File(...)):
 
     preds = model.predict(processed)[0]
 
-    idx = np.argmax(preds)
+    idx = int(np.argmax(preds))
     confidence = float(preds[idx])
 
     return {
         "filename": file.filename,
         "disease": CLASS_NAMES[idx],
-        "confidence": f"{confidence * 100:.2f}%"
+        "confidence": f"{confidence*100:.2f}%"
     }
 
+# --------------------------
+# SOIL API
+# --------------------------
 
-# -------------------------------------
-# 🌱 SOIL AI
-# -------------------------------------
 class SoilData(BaseModel):
     ph: float
     nitrogen: float
@@ -96,12 +114,10 @@ def analyze_soil(data: SoilData):
         data.moisture
     ) / 5
 
-    grade = (
-        "Excellent" if score >= 80 else
-        "Good" if score >= 60 else
-        "Moderate" if score >= 40 else
-        "Poor"
-    )
+    grade = "Excellent" if score >= 80 else \
+            "Good" if score >= 60 else \
+            "Moderate" if score >= 40 else \
+            "Poor"
 
     recommendations = []
 
@@ -111,13 +127,13 @@ def analyze_soil(data: SoilData):
         recommendations.append("Add compost to reduce alkalinity")
 
     if data.nitrogen < 50:
-        recommendations.append("Apply Urea or Vermicompost")
+        recommendations.append("Apply urea or vermicompost")
 
     if data.phosphorus < 40:
-        recommendations.append("Apply SSP")
+        recommendations.append("Apply single super phosphate (SSP)")
 
     if data.potassium < 40:
-        recommendations.append("Apply Potash")
+        recommendations.append("Apply potash fertilizer")
 
     if data.moisture < 30:
         recommendations.append("Increase irrigation")
@@ -128,10 +144,10 @@ def analyze_soil(data: SoilData):
         "recommendations": recommendations
     }
 
+# --------------------------
+# FERTILIZER API
+# --------------------------
 
-# -------------------------------------
-# 🌾 FERTILIZER AI
-# -------------------------------------
 class FertilizerData(BaseModel):
     crop: str
     nitrogen: float
@@ -146,28 +162,28 @@ def recommend_fertilizer(data: FertilizerData):
     rec = []
 
     if data.nitrogen < 50:
-        rec.append("Apply Urea - 45 kg/ac")
+        rec.append("Apply Urea — 45 kg per acre")
 
     if data.phosphorus < 40:
-        rec.append("Apply SSP - 35 kg/ac")
+        rec.append("Apply SSP — 35 kg per acre")
 
     if data.potassium < 40:
-        rec.append("Apply Potash - 25 kg/ac")
+        rec.append("Apply Potash — 25 kg per acre")
 
     if not rec:
-        rec.append("Soil nutrients sufficient")
+        rec.append("NPK sufficient — no fertilizer required")
 
     return {
         "crop": data.crop,
         "recommendations": rec,
-        "organic_option": "Add Vermicompost 250kg/ac",
-        "safety_note": "Use gloves & mask while applying"
+        "organic_option": "Add Vermicompost (250 kg per acre)",
+        "safety_note": "Use gloves & mask during application"
     }
 
+# --------------------------
+# CROP API
+# --------------------------
 
-# -------------------------------------
-# 🌿 CROP RECOMMENDATION
-# -------------------------------------
 class CropData(BaseModel):
     soil_grade: str
     season: str
@@ -181,19 +197,19 @@ def recommend_crop(data: CropData):
     crops = []
 
     if data.soil_grade == "Excellent":
-        crops += ["Wheat","Rice","Sugarcane"]
+        crops += ["Wheat", "Rice", "Sugarcane"]
 
     elif data.soil_grade == "Good":
-        crops += ["Maize","Cotton"]
+        crops += ["Maize", "Cotton"]
 
     elif data.soil_grade == "Moderate":
-        crops += ["Millets","Pulses"]
+        crops += ["Millets", "Pulses"]
 
     else:
-        crops += ["Barley","Mustard"]
+        crops += ["Barley", "Mustard"]
 
     if data.season.lower() == "summer":
-        crops += ["Groundnut","Watermelon"]
+        crops += ["Groundnut", "Watermelon"]
 
     if data.rainfall.lower() == "high":
         crops.append("Paddy")
@@ -204,10 +220,10 @@ def recommend_crop(data: CropData):
         "soil_grade": data.soil_grade
     }
 
+# --------------------------
+# MARKET API (Demo)
+# --------------------------
 
-# -------------------------------------
-# 📈 MARKET DEMO AI
-# -------------------------------------
 class MarketRequest(BaseModel):
     crop: str
     mandi: str
@@ -242,7 +258,6 @@ def market_prediction(data: MarketRequest):
     trend = trend_map.get(crop, "➡ Stable")
 
     prediction_7day = price + 150 if "⬆" in trend else price - 100
-
     best_sell_day = "Next 3 days" if "⬆" in trend else "Wait 5–7 days"
 
     return {
